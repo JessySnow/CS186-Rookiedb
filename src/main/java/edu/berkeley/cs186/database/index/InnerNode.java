@@ -127,9 +127,9 @@ class InnerNode extends BPlusNode {
         if (keys.size() > metadata.getOrder() * 2) {
             // 0. split the keys and children
             List<DataBox> leftKeys = new ArrayList<>(keys.subList(0, metadata.getOrder()));
+            List<Long> leftChildren = new ArrayList<>(children.subList(0, metadata.getOrder() + 1));
             List<DataBox> rightKeys = new ArrayList<>(keys.subList(metadata.getOrder() + 1, metadata.getOrder() * 2 + 1));
-            List<Long> leftChildren = new ArrayList<>(children.subList(0, metadata.getOrder()));
-            List<Long> rightChildren = new ArrayList<>(children.subList(metadata.getOrder() + 1, metadata.getOrder() * 2 + 1));
+            List<Long> rightChildren = new ArrayList<>(children.subList(metadata.getOrder() + 1, metadata.getOrder() * 2 + 2));
             DataBox midKey = keys.get(metadata.getOrder());
 
             // 1. construct a new inner node with a new page and update this inner node
@@ -160,6 +160,7 @@ class InnerNode extends BPlusNode {
     public void remove(DataBox key) {
         // TODO(proj2): implement
         get(key).remove(key);
+        sync();
     }
 
     // Helpers /////////////////////////////////////////////////////////////////

@@ -159,7 +159,6 @@ class LeafNode extends BPlusNode {
     // See BPlusNode.put.
     @Override
     public Optional<Pair<DataBox, Long>> put(DataBox key, RecordId rid) {
-        // TODO(proj2): implement
 
         // no (key, recordId) fast return
         if (keys.isEmpty()) {
@@ -169,7 +168,8 @@ class LeafNode extends BPlusNode {
         }
 
         // insert new (k, r)
-        for (int i = 0; i < keys.size(); i++) {
+        int i = 0;
+        for (; i < keys.size(); i++) {
             if (key.compareTo(keys.get(i)) == 0) {
                 throw new BPlusTreeException(String.format("Key %d is already present", i));
             }
@@ -178,6 +178,10 @@ class LeafNode extends BPlusNode {
                 rids.add(i, rid);
                 break;
             }
+        }
+        if (i == keys.size()) {
+            keys.add(key);
+            rids.add(rid);
         }
 
         // split if needed
@@ -215,12 +219,12 @@ class LeafNode extends BPlusNode {
     // See BPlusNode.remove.
     @Override
     public void remove(DataBox key) {
-        // TODO(proj2): implement
         int index = keys.indexOf(key);
         if (index >= 0) {
             keys.remove(index);
             rids.remove(index);
         }
+        sync();
     }
 
     // Iterators ///////////////////////////////////////////////////////////////
@@ -261,7 +265,7 @@ class LeafNode extends BPlusNode {
      * Returns the right sibling of this leaf, if it has one.
      */
     Optional<LeafNode> getRightSibling() {
-        if (!rightSibling.isPresent()) {
+        if (!rightSibling.isPresent() || rightSibling.get().equals(-1L)) {
             return Optional.empty();
         }
 
