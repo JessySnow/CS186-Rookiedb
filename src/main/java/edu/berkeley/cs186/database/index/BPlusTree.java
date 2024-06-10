@@ -203,8 +203,7 @@ public class BPlusTree {
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
         // TODO(proj2): Return a BPlusTreeIterator.
-
-        return Collections.emptyIterator();
+        return new BPlusTreeIterator();
     }
 
     /**
@@ -235,9 +234,7 @@ public class BPlusTree {
         // TODO(proj4_integration): Update the following line
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
-        // TODO(proj2): Return a BPlusTreeIterator.
-
-        return Collections.emptyIterator();
+        return new BPlusTreeIterator(key);
     }
 
     /**
@@ -439,20 +436,57 @@ public class BPlusTree {
 
     // Iterator ////////////////////////////////////////////////////////////////
     private class BPlusTreeIterator implements Iterator<RecordId> {
-        // TODO(proj2): Add whatever fields and constructors you want here.
+        private LeafNode cursor;
+        private Iterator<RecordId> recordIdIterator;
+
+
+        public BPlusTreeIterator() {
+            cursor = root.getLeftmostLeaf();
+            recordIdIterator = Optional.ofNullable(cursor)
+                    .map(node -> node.getRids().iterator())
+                    .orElse(null);
+        }
+
+        public BPlusTreeIterator(DataBox key) {
+            cursor = root.get(key);
+            List<DataBox> keys = cursor.getKeys();
+
+            int startIndex = 0;
+            for (; startIndex < keys.size(); startIndex++) {
+                if (keys.get(startIndex).compareTo(key) >= 0) {
+                    break;
+                }
+            }
+
+            if (startIndex >= keys.size()) {
+                this.recordIdIterator = Collections.emptyIterator();
+            } else {
+                this.recordIdIterator = cursor.getRids().listIterator(startIndex);
+            }
+        }
 
         @Override
         public boolean hasNext() {
-            // TODO(proj2): implement
+            if (null == cursor) {
+                return true;
+            }
 
-            return false;
+            boolean hasNext = recordIdIterator.hasNext();
+            boolean hasSibling = cursor.getRightSibling().isPresent();
+            return hasNext || hasSibling;
         }
 
         @Override
         public RecordId next() {
-            // TODO(proj2): implement
-
-            throw new NoSuchElementException();
+            if (recordIdIterator.hasNext()) {
+                return recordIdIterator.next();
+            } else if (cursor.getRightSibling().isPresent()) {
+                cursor = cursor.getRightSibling().get();
+                recordIdIterator = cursor.getRids().iterator();
+                return recordIdIterator.next();
+            } else {
+                throw new NoSuchElementException();
+            }
         }
     }
 }
