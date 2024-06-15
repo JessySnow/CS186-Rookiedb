@@ -4,7 +4,6 @@ import edu.berkeley.cs186.database.common.Buffer;
 import edu.berkeley.cs186.database.common.Pair;
 import edu.berkeley.cs186.database.concurrency.LockContext;
 import edu.berkeley.cs186.database.databox.DataBox;
-import edu.berkeley.cs186.database.databox.IntDataBox;
 import edu.berkeley.cs186.database.databox.Type;
 import edu.berkeley.cs186.database.memory.BufferManager;
 import edu.berkeley.cs186.database.memory.Page;
@@ -125,21 +124,7 @@ class InnerNode extends BPlusNode {
 
         // split the key if needed
         if (keys.size() > metadata.getOrder() * 2) {
-            // 0. split the keys and children
-            List<DataBox> leftKeys = new ArrayList<>(keys.subList(0, metadata.getOrder()));
-            List<Long> leftChildren = new ArrayList<>(children.subList(0, metadata.getOrder() + 1));
-            List<DataBox> rightKeys = new ArrayList<>(keys.subList(metadata.getOrder() + 1, metadata.getOrder() * 2 + 1));
-            List<Long> rightChildren = new ArrayList<>(children.subList(metadata.getOrder() + 1, metadata.getOrder() * 2 + 2));
-            DataBox midKey = keys.get(metadata.getOrder());
-
-            // 1. construct a new inner node with a new page and update this inner node
-            InnerNode newInnerNode = new InnerNode(metadata, bufferManager, rightKeys, rightChildren, treeContext);
-            this.keys = leftKeys;
-            this.children = leftChildren;
-
-            // 2. sync to bufferManager and return split info
-            sync();
-            return Optional.of(new Pair<>(midKey, newInnerNode.getPage().getPageNum()));
+            return split();
         }
 
         sync();
@@ -150,8 +135,19 @@ class InnerNode extends BPlusNode {
     @Override
     public Optional<Pair<DataBox, Long>> bulkLoad(Iterator<Pair<DataBox, RecordId>> data,
                                                   float fillFactor) {
-        // TODO(proj2): implement
+        int rightMostChildIndex = children.size();
+        Optional<Pair<DataBox, Long>> splitInfo = getChild(rightMostChildIndex).bulkLoad(data, fillFactor);
+        if (splitInfo.isPresent()) {
+            keys.add(splitInfo.get().getFirst());
+            children.add(splitInfo.get().getSecond());
+        }
 
+        // split the key if needed
+        if (keys.size() > metadata.getOrder() * 2) {
+            return split();
+        }
+
+        sync();
         return Optional.empty();
     }
 
@@ -422,5 +418,23 @@ class InnerNode extends BPlusNode {
     @Override
     public int hashCode() {
         return Objects.hash(page.getPageNum(), keys, children);
+    }
+
+    private Optional<Pair<DataBox, Long>> split() {
+        // 0. split the keys and children
+        List<DataBox> leftKeys = new ArrayList<>(keys.subList(0, metadata.getOrder()));
+        List<Long> leftChildren = new ArrayList<>(children.subList(0, metadata.getOrder() + 1));
+        List<DataBox> rightKeys = new ArrayList<>(keys.subList(metadata.getOrder() + 1, metadata.getOrder() * 2 + 1));
+        List<Long> rightChildren = new ArrayList<>(children.subList(metadata.getOrder() + 1, metadata.getOrder() * 2 + 2));
+        DataBox midKey = keys.get(metadata.getOrder());
+
+        // 1. construct a new inner node with a new page and update this inner node
+        InnerNode newInnerNode = new InnerNode(metadata, bufferManager, rightKeys, rightChildren, treeContext);
+        this.keys = leftKeys;
+        this.children = leftChildren;
+
+        // 2. sync to bufferManager and return split info
+        sync();
+        return Optional.of(new Pair<>(midKey, newInnerNode.getPage().getPageNum()));
     }
 }
