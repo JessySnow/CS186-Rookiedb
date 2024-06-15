@@ -186,21 +186,7 @@ class LeafNode extends BPlusNode {
 
         // split if needed
         if (keys.size() > metadata.getOrder() * 2) {
-            // 0. split the keys and recordId
-            List<DataBox> leftKeys = new ArrayList<>(keys.subList(0, metadata.getOrder()));
-            List<DataBox> rightKeys = new ArrayList<>(keys.subList(metadata.getOrder(), metadata.getOrder() * 2 + 1));
-            List<RecordId> leftRids = new ArrayList<>(rids.subList(0, metadata.getOrder()));
-            List<RecordId> rightRids = new ArrayList<>(rids.subList(metadata.getOrder(), metadata.getOrder() * 2 + 1));
-
-            // 1. construct a new leaf node with a new page and update this leaf
-            LeafNode newLeafNode = new LeafNode(metadata, bufferManager, rightKeys, rightRids, rightSibling, treeContext);
-            this.keys = leftKeys;
-            this.rids = leftRids;
-            this.rightSibling = Optional.of(newLeafNode.getPage().getPageNum());
-
-            // 2. sync to bufferManager and return split info
-            sync();
-            return Optional.of(new Pair<>(rightKeys.get(0), newLeafNode.getPage().getPageNum()));
+            return split();
         }
 
         sync();
@@ -211,8 +197,17 @@ class LeafNode extends BPlusNode {
     @Override
     public Optional<Pair<DataBox, Long>> bulkLoad(Iterator<Pair<DataBox, RecordId>> data,
                                                   float fillFactor) {
-        // TODO(proj2): implement
+        // 0. insert into keys and rids
+        Pair<DataBox, RecordId> pair = data.next();
+        keys.add(pair.getFirst());
+        rids.add(pair.getSecond());
 
+        // 1. split if needed
+        if (keys.size() > metadata.getOrder() * fillFactor) {
+            return split();
+        }
+
+        sync();
         return Optional.empty();
     }
 
@@ -465,5 +460,23 @@ class LeafNode extends BPlusNode {
     @Override
     public int hashCode() {
         return Objects.hash(page.getPageNum(), keys, rids, rightSibling);
+    }
+
+    private Optional<Pair<DataBox, Long>> split() {
+        // 0. split the keys and recordId
+        List<DataBox> leftKeys = new ArrayList<>(keys.subList(0, metadata.getOrder()));
+        List<DataBox> rightKeys = new ArrayList<>(keys.subList(metadata.getOrder(), metadata.getOrder() * 2 + 1));
+        List<RecordId> leftRids = new ArrayList<>(rids.subList(0, metadata.getOrder()));
+        List<RecordId> rightRids = new ArrayList<>(rids.subList(metadata.getOrder(), metadata.getOrder() * 2 + 1));
+
+        // 1. construct a new leaf node with a new page and update this leaf
+        LeafNode newLeafNode = new LeafNode(metadata, bufferManager, rightKeys, rightRids, rightSibling, treeContext);
+        this.keys = leftKeys;
+        this.rids = leftRids;
+        this.rightSibling = Optional.of(newLeafNode.getPage().getPageNum());
+
+        // 2. sync to bufferManager and return split info
+        sync();
+        return Optional.of(new Pair<>(rightKeys.get(0), newLeafNode.getPage().getPageNum()));
     }
 }

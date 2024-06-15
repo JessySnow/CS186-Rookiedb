@@ -259,18 +259,10 @@ public class BPlusTree {
         }
 
         // put new pair
-        Optional<Pair<DataBox, Long>> splitPair = root.put(key, rid);
+        Optional<Pair<DataBox, Long>> splitInfo = root.put(key, rid);
 
         // split if needed
-        if (splitPair.isPresent()) {
-            ArrayList<DataBox> newRootKeys = new ArrayList<>();
-            ArrayList<Long> newRootChildren = new ArrayList<>();
-            newRootKeys.add(splitPair.get().getFirst());
-            newRootChildren.add(root.getPage().getPageNum());
-            newRootChildren.add(splitPair.get().getSecond());
-            InnerNode newRoot = new InnerNode(metadata, bufferManager, newRootKeys, newRootChildren, lockContext);
-            updateRoot(newRoot);
-        }
+        splitInfo.ifPresent(this::split);
     }
 
     /**
@@ -298,8 +290,19 @@ public class BPlusTree {
         // Note: You should NOT update the root variable directly.
         // Use the provided updateRoot() helper method to change
         // the tree's root if the old root splits.
+        if (fillFactor <= 0 || fillFactor > 1) {
+            throw new IllegalArgumentException("Fill factor must be between 0 and 1");
+        }
 
-        return;
+        // empty tree situation
+        if (Objects.isNull(root)) {
+            updateRoot(new LeafNode(metadata, bufferManager, new ArrayList<>(), new ArrayList<>(), Optional.empty(), lockContext));
+        }
+
+        while (data.hasNext()) {
+            Optional<Pair<DataBox, Long>> splitInfo = root.bulkLoad(data, fillFactor);
+            splitInfo.ifPresent(this::split);
+        }
     }
 
     /**
@@ -488,5 +491,15 @@ public class BPlusTree {
                 throw new NoSuchElementException();
             }
         }
+    }
+
+    private void split(Pair<DataBox, Long> splitPair) {
+        ArrayList<DataBox> newRootKeys = new ArrayList<>();
+        ArrayList<Long> newRootChildren = new ArrayList<>();
+        newRootKeys.add(splitPair.getFirst());
+        newRootChildren.add(root.getPage().getPageNum());
+        newRootChildren.add(splitPair.getSecond());
+        InnerNode newRoot = new InnerNode(metadata, bufferManager, newRootKeys, newRootChildren, lockContext);
+        updateRoot(newRoot);
     }
 }
