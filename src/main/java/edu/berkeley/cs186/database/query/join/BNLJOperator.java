@@ -40,7 +40,7 @@ public class BNLJOperator extends JoinOperator {
         int numLeftPages = getLeftSource().estimateStats().getNumPages();
         int numRightPages = getRightSource().estimateIOCost();
         return ((int) Math.ceil((double) numLeftPages / (double) usableBuffers)) * numRightPages +
-               getLeftSource().estimateIOCost();
+                getLeftSource().estimateIOCost();
     }
 
     /**
@@ -48,7 +48,7 @@ public class BNLJOperator extends JoinOperator {
      * Look over the implementation in SNLJOperator if you want to get a feel
      * for the fetchNextRecord() logic.
      */
-    private class BNLJIterator implements Iterator<Record>{
+    private class BNLJIterator implements Iterator<Record> {
         // Iterator over all the records of the left source
         private Iterator<Record> leftSourceIterator;
         // Iterator over all the records of the right source
@@ -79,41 +79,76 @@ public class BNLJOperator extends JoinOperator {
          * leftBlockIterator should be set to a backtracking iterator over up to
          * B-2 pages of records from the left source, and leftRecord should be
          * set to the first record in this block.
-         *
+         * <p>
          * If there are no more records in the left source, this method should
          * do nothing.
-         *
+         * <p>
          * You may find QueryOperator#getBlockIterator useful here.
          */
         private void fetchNextLeftBlock() {
-            // TODO(proj3_part1): implement
+            if (!leftSourceIterator.hasNext()) {
+                return;
+            }
+
+            this.leftBlockIterator = QueryOperator.getBlockIterator(leftSourceIterator, getLeftSource().getSchema(), numBuffers - 2);
+            leftBlockIterator.markNext();
+            this.leftRecord = leftBlockIterator.next();
         }
 
         /**
          * Fetch the next page of records from the right source.
          * rightPageIterator should be set to a backtracking iterator over up to
          * one page of records from the right source.
-         *
+         * <p>
          * If there are no more records in the right source, this method should
          * do nothing.
-         *
+         * <p>
          * You may find QueryOperator#getBlockIterator useful here.
          */
         private void fetchNextRightPage() {
-            // TODO(proj3_part1): implement
+            if (!rightSourceIterator.hasNext()) {
+               return;
+            }
+
+            this.rightPageIterator = QueryOperator.getBlockIterator(rightSourceIterator, getRightSource().getSchema(), 1);
+            rightPageIterator.markNext();
         }
 
         /**
          * Returns the next record that should be yielded from this join,
          * or null if there are no more records to join.
-         *
+         * <p>
          * You may find JoinOperator#compare useful here. (You can call compare
          * function directly from this file, since BNLJOperator is a subclass
          * of JoinOperator).
          */
         private Record fetchNextRecord() {
-            // TODO(proj3_part1): implement
-            return null;
+            // leftSourceIterator 一开始就是空的情况
+            if (leftRecord == null) {
+                return null;
+            }
+
+            while (true) {
+                if (this.rightPageIterator.hasNext()) {
+                    Record rightRecord = rightPageIterator.next();
+                    if (compare(rightRecord, leftRecord) == 0) {
+                        return leftRecord.concat(rightRecord);
+                    }
+                } else if (leftBlockIterator.hasNext()) {
+                    this.leftRecord = leftBlockIterator.next();
+                    this.rightPageIterator.reset();
+                } else if (rightSourceIterator.hasNext()){
+                    fetchNextRightPage();
+                    leftBlockIterator.reset();
+                    leftRecord = leftBlockIterator.next();
+                } else if (leftSourceIterator.hasNext()){
+                    rightSourceIterator.reset();
+                    fetchNextRightPage();
+                    fetchNextLeftBlock();
+                } else {
+                    return null;
+                }
+            }
         }
 
         /**
