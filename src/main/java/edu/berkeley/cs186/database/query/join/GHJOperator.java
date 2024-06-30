@@ -67,11 +67,18 @@ public class GHJOperator extends JoinOperator {
      * @param pass the current pass (used to pick a hash function)
      */
     private void partition(Partition[] partitions, Iterable<Record> records, boolean left, int pass) {
-        // TODO(proj3_part1): implement the partitioning logic
-        // You may find the implementation in SHJOperator.java to be a good
-        // starting point. You can use the static method HashFunc.hashDataBox
-        // to get a hash value.
-        return;
+        for (Record record : records) {
+            DataBox columnValue = record.getValue(getRightColumnIndex());
+            if (left) {
+                columnValue = record.getValue(getLeftColumnIndex());
+            }
+
+            int hash = HashFunc.hashDataBox(columnValue, pass);
+            int partitionNum = hash % partitions.length;
+            if (partitionNum < 0)  // hash might be negative
+                partitionNum += partitions.length;
+            partitions[partitionNum].add(record);
+        }
     }
 
     /**
@@ -112,6 +119,29 @@ public class GHJOperator extends JoinOperator {
         // You shouldn't refer to any variable starting with "left" or "right"
         // here, use the "build" and "probe" variables we set up for you.
         // Check out how SHJOperator implements this function if you feel stuck.
+
+        Map<DataBox, List<Record>> hashTable = new HashMap<>();
+
+        // build
+        for (Record record : buildRecords) {
+            DataBox joinValue = record.getValue(buildColumnIndex);
+            if (!hashTable.containsKey(joinValue)) {
+                hashTable.put(joinValue, new ArrayList<>());
+            }
+            hashTable.get(joinValue).add(record);
+        }
+
+        // probe
+        for (Record record : probeRecords) {
+            DataBox value = record.getValue(probeColumnIndex);
+            if (!hashTable.containsKey(value)) {
+                continue;
+            }
+            for (Record buildRecord : hashTable.get(value)) {
+                Record joinedRecord = buildRecord.concat(record);
+                this.joinedRecords.add(joinedRecord);
+            }
+        }
     }
 
     /**
@@ -133,9 +163,12 @@ public class GHJOperator extends JoinOperator {
         this.partition(rightPartitions, rightRecords, false, pass);
 
         for (int i = 0; i < leftPartitions.length; i++) {
-            // TODO(proj3_part1): implement the rest of grace hash join
-            // If you meet the conditions to run the build and probe you should
-            // do so immediately. Otherwise you should make a recursive call.
+            if (leftPartitions[i].getNumPages() <= this.numBuffers - 2 ||
+                    rightPartitions[i].getNumPages() <= this.numBuffers - 2) {
+                buildAndProbe(leftPartitions[i], rightPartitions[i]);
+            } else {
+                run(leftPartitions[i], rightPartitions[i], pass + 1);
+            }
         }
     }
 
@@ -201,8 +234,11 @@ public class GHJOperator extends JoinOperator {
         ArrayList<Record> leftRecords = new ArrayList<>();
         ArrayList<Record> rightRecords = new ArrayList<>();
 
-        // TODO(proj3_part1): populate leftRecords and rightRecords such that
-        // SHJ breaks when trying to join them but not GHJ
+        for (int i = 0; i < 33; ++ i) {
+            leftRecords.add(createRecord(1));
+            rightRecords.add(createRecord(1));
+        }
+
         return new Pair<>(leftRecords, rightRecords);
     }
 
@@ -222,7 +258,11 @@ public class GHJOperator extends JoinOperator {
     public static Pair<List<Record>, List<Record>> getBreakGHJInputs() {
         ArrayList<Record> leftRecords = new ArrayList<>();
         ArrayList<Record> rightRecords = new ArrayList<>();
-        // TODO(proj3_part1): populate leftRecords and rightRecords such that GHJ breaks
+
+        for (int i = 0; i < 1537 ; ++ i) {
+            leftRecords.add(createRecord(i));
+            rightRecords.add(createRecord(i));
+        }
 
         return new Pair<>(leftRecords, rightRecords);
     }
