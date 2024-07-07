@@ -154,11 +154,11 @@ public class SortOperator extends QueryOperator {
     public List<Run> mergePass(List<Run> runs) {
         List<Run> res = new ArrayList<>();
         for (int i = 0; i < runs.size();) {
-            ArrayList<Run> toMerge = new ArrayList<>(numBuffers - 1);
-            for (; i < runs.size() && toMerge.size() < numBuffers - 1; ++ i) {
-                toMerge.add(runs.get(i));
+            ArrayList<Run> toMergeRuns = new ArrayList<>(numBuffers - 1);
+            for (; i < runs.size() && toMergeRuns.size() < numBuffers - 1; ++ i) {
+                toMergeRuns.add(runs.get(i));
             }
-            Run mergedRun = mergeSortedRuns(toMerge);
+            Run mergedRun = mergeSortedRuns(toMergeRuns);
             res.add(mergedRun);
         }
 
@@ -185,12 +185,11 @@ public class SortOperator extends QueryOperator {
             sortedRuns.add(sortRun(blockIterator));
         }
 
-        List<Run> mergeRun = mergePass(sortedRuns);
-        do {
-            mergeRun = mergePass(mergeRun);
-        } while (mergeRun.size() > 1);
+        while (sortedRuns.size() > 1) {
+            sortedRuns = mergePass(sortedRuns);
+        }
 
-        return mergeRun.get(0);
+        return sortedRuns.get(0);
     }
 
     /**
