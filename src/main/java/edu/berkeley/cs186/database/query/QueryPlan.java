@@ -10,6 +10,7 @@ import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.table.Schema;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * QueryPlan provides a set of functions to generate simple queries. Calling the
@@ -574,10 +575,24 @@ public class QueryPlan {
      * minimum cost operator can be broken arbitrarily.
      */
     public QueryOperator minCostSingleAccess(String table) {
-        QueryOperator minOp = new SequentialScanOperator(this.transaction, table);
+        // sequential scan and predicate push down
+        QueryOperator minCostScanOperator = addEligibleSelections(new SequentialScanOperator(transaction, table), -1);
+        int minCost = minCostScanOperator.estimateIOCost();
 
-        // TODO(proj3_part2): implement
-        return minOp;
+        // index scan and predicate push  down
+        List<Integer> columns = getEligibleIndexColumns(table);
+        for (Integer column : columns) {
+            SelectPredicate predicate = selectPredicates.get(column);
+            int cost;
+            QueryOperator scanOperator = new IndexScanOperator(transaction, table, predicate.column, predicate.operator, predicate.value);
+            scanOperator = addEligibleSelections(scanOperator, column);
+            if ((cost = scanOperator.estimateIOCost()) < minCost) {
+                minCostScanOperator = scanOperator;
+                minCost = cost;
+            }
+        }
+
+        return minCostScanOperator;
     }
 
     // Task 6: Join Selection //////////////////////////////////////////////////
