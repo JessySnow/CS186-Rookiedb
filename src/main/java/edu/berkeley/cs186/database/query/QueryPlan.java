@@ -645,6 +645,36 @@ public class QueryPlan {
             Map<Set<String>, QueryOperator> prevMap,
             Map<Set<String>, QueryOperator> pass1Map) {
         Map<Set<String>, QueryOperator> result = new HashMap<>();
+        for (Set<String> tables : prevMap.keySet()) {
+            for (JoinPredicate predicate : joinPredicates) {
+                QueryOperator leftOperator;
+                QueryOperator rightOperator;
+                QueryOperator joinOperator;
+                // non tables in the prevMap just skip
+                if (tables.contains(predicate.leftTable) && !tables.contains(predicate.rightTable)) {
+                    leftOperator = prevMap.get(tables);
+                    rightOperator = pass1Map.get(Collections.singleton(predicate.rightTable));
+                    joinOperator = minCostJoinType(leftOperator, rightOperator, predicate.leftColumn, predicate.rightColumn);
+                } else if (tables.contains(predicate.rightTable) && !tables.contains(predicate.leftTable)) {
+                    rightOperator = prevMap.get(tables);
+                    leftOperator = pass1Map.get(Collections.singleton(predicate.leftTable));
+                    joinOperator = minCostJoinType(rightOperator, leftOperator, predicate.rightColumn, predicate.leftColumn);
+                } else {
+                    continue;
+                }
+
+
+                HashSet<String> newJoinedTables = new HashSet<>(tables);
+                newJoinedTables.add(predicate.leftTable);
+                newJoinedTables.add(predicate.rightTable);
+                if (!result.containsKey(newJoinedTables)) {
+                    result.put(newJoinedTables, joinOperator);
+                } else if (result.get(newJoinedTables).estimateIOCost() > joinOperator.estimateIOCost()) {
+                    result.put(newJoinedTables, joinOperator);
+                }
+            }
+        }
+
         // TODO(proj3_part2): implement
         // We provide a basic description of the logic you have to implement:
         // For each set of tables in prevMap
