@@ -667,9 +667,7 @@ public class QueryPlan {
                 HashSet<String> newJoinedTables = new HashSet<>(tables);
                 newJoinedTables.add(predicate.leftTable);
                 newJoinedTables.add(predicate.rightTable);
-                if (!result.containsKey(newJoinedTables)) {
-                    result.put(newJoinedTables, joinOperator);
-                } else if (result.get(newJoinedTables).estimateIOCost() > joinOperator.estimateIOCost()) {
+                if (!result.containsKey(newJoinedTables) || result.get(newJoinedTables).estimateIOCost() > joinOperator.estimateIOCost()) {
                     result.put(newJoinedTables, joinOperator);
                 }
             }
