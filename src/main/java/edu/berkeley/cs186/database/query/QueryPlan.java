@@ -674,23 +674,6 @@ public class QueryPlan {
                 }
             }
         }
-
-        // TODO(proj3_part2): implement
-        // We provide a basic description of the logic you have to implement:
-        // For each set of tables in prevMap
-        //   For each join predicate listed in this.joinPredicates
-        //      Get the left side and the right side of the predicate (table name and column)
-        //
-        //      Case 1: The set contains left table but not right, use pass1Map
-        //              to fetch an operator to access the rightTable
-        //      Case 2: The set contains right table but not left, use pass1Map
-        //              to fetch an operator to access the leftTable.
-        //      Case 3: Otherwise, skip this join predicate and continue the loop.
-        //
-        //      Using the operator from Case 1 or 2, use minCostJoinType to
-        //      calculate the cheapest join with the new table (the one you
-        //      fetched an operator for from pass1Map) and the previously joined
-        //      tables. Then, update the result map if needed.
         return result;
     }
 
