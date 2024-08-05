@@ -15,6 +15,7 @@ public enum LockType {
     NL;  // no lock held
 
     private static final boolean[][] compatibleMatrix;
+    private static final boolean[][] substitutableMatrix;
     private static final EnumMap<LockType, EnumSet<LockType>> childLocks; // parent lock to child locks
 
     static {
@@ -25,6 +26,14 @@ public enum LockType {
                 {false, false, true, true, false, true}, // intend exclusive lock compatible with intention shared lock and intention exclusive lock
                 {false, false, true, false, false, true},
                 {true, true, true, true, true, true}, // NL compatible with all locks
+        };
+        substitutableMatrix = new boolean[][] {
+                {true, true, false, false, true, false},
+                {false, true, false, false, false, false},
+                {true, true, true, true, true, false},
+                {false, true, false, true, true, false},
+                {false, true, false, false, true, false},
+                {true, true, true, true, true, true},
         };
         childLocks = new EnumMap<>(LockType.class);
         childLocks.put(NL, EnumSet.of(NL));
@@ -90,9 +99,8 @@ public enum LockType {
         if (required == null || substitute == null) {
             throw new NullPointerException("null lock type");
         }
-        // TODO(proj4_part1): implement
 
-        return false;
+        return substitutableMatrix[required.ordinal()][substitute.ordinal()];
     }
 
     /**
