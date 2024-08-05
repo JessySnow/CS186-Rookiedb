@@ -11,7 +11,7 @@ public enum LockType {
     SIX, // shared intention exclusive
     NL;  // no lock held
 
-    private static boolean[][] compatibleMatrix = new boolean[][]{
+    private static final boolean[][] compatibleMatrix = new boolean[][]{
             {true, false, true, false, false, true}, // shared lock only compatible with shared lock or intend share lock
             {false, false, false, false, false, true}, // exclusive lock only compatible with no lock
             {true, false, true, true, true, true}, // intend shared lock only compatible with intention lock and shared lock
