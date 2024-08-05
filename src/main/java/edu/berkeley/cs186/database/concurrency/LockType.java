@@ -14,23 +14,25 @@ public enum LockType {
     SIX, // shared intention exclusive
     NL;  // no lock held
 
-    private static final boolean[][] compatibleMatrix = new boolean[][]{
-            {true, false, true, false, false, true}, // shared lock only compatible with shared lock or intend share lock
-            {false, false, false, false, false, true}, // exclusive lock only compatible with no lock
-            {true, false, true, true, true, true}, // intend shared lock only compatible with intention lock and shared lock
-            {false, false, true, true, false, true}, // intend exclusive lock compatible with intention shared lock and intention exclusive lock
-            {false, false, true, false, false, true},
-            {true, true, true, true, true, true}, // NL compatible with all locks
-    };
-    private static final EnumMap<LockType, EnumSet<LockType>> parentLocks;
+    private static final boolean[][] compatibleMatrix;
+    private static final EnumMap<LockType, EnumSet<LockType>> childLocks; // parent lock to child locks
+
     static {
-        parentLocks = new EnumMap<>(LockType.class);
-        parentLocks.put(NL, EnumSet.allOf(LockType.class));
-        parentLocks.put(S, EnumSet.of(S, X, IS, IX, SIX));
-        parentLocks.put(X, EnumSet.of(X, IX));
-        parentLocks.put(IS, EnumSet.of(S, X, IS, IX, SIX));
-        parentLocks.put(IX, EnumSet.of(X, IX));
-        parentLocks.put(SIX, EnumSet.of(X, IX));
+        compatibleMatrix = new boolean[][]{
+                {true, false, true, false, false, true}, // shared lock only compatible with shared lock or intend share lock
+                {false, false, false, false, false, true}, // exclusive lock only compatible with no lock
+                {true, false, true, true, true, true}, // intend shared lock only compatible with intention lock and shared lock
+                {false, false, true, true, false, true}, // intend exclusive lock compatible with intention shared lock and intention exclusive lock
+                {false, false, true, false, false, true},
+                {true, true, true, true, true, true}, // NL compatible with all locks
+        };
+        childLocks = new EnumMap<>(LockType.class);
+        childLocks.put(NL, EnumSet.of(NL));
+        childLocks.put(IS, EnumSet.of(NL, IS, S));
+        childLocks.put(IX, EnumSet.allOf(LockType.class));
+        childLocks.put(S, EnumSet.of(NL));
+        childLocks.put(SIX, EnumSet.of(NL, X, IX, SIX));
+        childLocks.put(X, EnumSet.of(NL));
     }
 
     /**
@@ -75,7 +77,7 @@ public enum LockType {
             throw new NullPointerException("null lock type");
         }
 
-        return parentLocks.get(childLockType).contains(parentLockType);
+        return childLocks.get(parentLockType).contains(childLockType);
     }
 
     /**
@@ -103,13 +105,20 @@ public enum LockType {
     @Override
     public String toString() {
         switch (this) {
-        case S: return "S";
-        case X: return "X";
-        case IS: return "IS";
-        case IX: return "IX";
-        case SIX: return "SIX";
-        case NL: return "NL";
-        default: throw new UnsupportedOperationException("bad lock type");
+            case S:
+                return "S";
+            case X:
+                return "X";
+            case IS:
+                return "IS";
+            case IX:
+                return "IX";
+            case SIX:
+                return "SIX";
+            case NL:
+                return "NL";
+            default:
+                throw new UnsupportedOperationException("bad lock type");
         }
     }
 }
