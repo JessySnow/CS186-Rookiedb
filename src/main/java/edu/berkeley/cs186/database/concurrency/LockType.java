@@ -1,5 +1,8 @@
 package edu.berkeley.cs186.database.concurrency;
 
+import java.util.EnumMap;
+import java.util.EnumSet;
+
 /**
  * Utility methods to track the relationships between different lock types.
  */
@@ -19,6 +22,16 @@ public enum LockType {
             {false, false, true, false, false, true},
             {true, true, true, true, true, true}, // NL compatible with all locks
     };
+    private static final EnumMap<LockType, EnumSet<LockType>> parentLocks;
+    static {
+        parentLocks = new EnumMap<>(LockType.class);
+        parentLocks.put(NL, EnumSet.allOf(LockType.class));
+        parentLocks.put(S, EnumSet.of(S, X, IS, IX, SIX));
+        parentLocks.put(X, EnumSet.of(X, IX));
+        parentLocks.put(IS, EnumSet.of(S, X, IS, IX, SIX));
+        parentLocks.put(IX, EnumSet.of(X, IX));
+        parentLocks.put(SIX, EnumSet.of(X, IX));
+    }
 
     /**
      * This method checks whether lock types A and B are compatible with
@@ -61,9 +74,8 @@ public enum LockType {
         if (parentLockType == null || childLockType == null) {
             throw new NullPointerException("null lock type");
         }
-        // TODO(proj4_part1): implement
 
-        return false;
+        return parentLocks.get(childLockType).contains(parentLockType);
     }
 
     /**
