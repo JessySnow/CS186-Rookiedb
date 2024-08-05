@@ -58,8 +58,12 @@ public class LockManager {
          * the resource.
          */
         public boolean checkCompatible(LockType lockType, long except) {
-            // TODO(proj4_part1): implement
-            return false;
+            for (Lock lock : locks) {
+                if (!LockType.compatible(lockType, lock.lockType) && Objects.equals(lock.transactionNum, except)) {
+                    return false;
+                }
+            }
+            return true;
         }
 
         /**
@@ -68,8 +72,10 @@ public class LockManager {
          * lock.
          */
         public void grantOrUpdateLock(Lock lock) {
-            // TODO(proj4_part1): implement
-            return;
+            for (Lock l : locks) {
+                if (l.transactionNum == lock.transactionNum) {
+                }
+            }
         }
 
         /**
@@ -86,8 +92,11 @@ public class LockManager {
          * the end otherwise.
          */
         public void addToQueue(LockRequest request, boolean addFront) {
-            // TODO(proj4_part1): implement
-            return;
+            if (addFront) {
+                this.waitingQueue.offerFirst(request);
+            } else {
+                this.waitingQueue.offerLast(request);
+            }
         }
 
         /**
@@ -106,7 +115,11 @@ public class LockManager {
          * Gets the type of lock `transaction` has on this resource.
          */
         public LockType getTransactionLockType(long transaction) {
-            // TODO(proj4_part1): implement
+            for (Lock lock : locks) {
+                if (Objects.equals(lock.transactionNum, transaction)) {
+                    return lock.lockType;
+                }
+            }
             return LockType.NL;
         }
 
