@@ -59,7 +59,7 @@ public class LockManager {
          */
         public boolean checkCompatible(LockType lockType, long except) {
             for (Lock lock : locks) {
-                if (!LockType.compatible(lockType, lock.lockType) && Objects.equals(lock.transactionNum, except)) {
+                if (!LockType.compatible(lockType, lock.lockType) && !Objects.equals(lock.transactionNum, except)) {
                     return false;
                 }
             }
@@ -72,10 +72,15 @@ public class LockManager {
          * lock.
          */
         public void grantOrUpdateLock(Lock lock) {
-            for (Lock l : locks) {
-                if (l.transactionNum == lock.transactionNum) {
+            for (int i = 0; i < locks.size(); i++) {
+                // update in place
+                if (Objects.equals(locks.get(i).transactionNum, lock.transactionNum)) {
+                    locks.set(i, lock);
+                    return;
                 }
             }
+
+            locks.add(lock);
         }
 
         /**
@@ -83,8 +88,8 @@ public class LockManager {
          * lock has been granted before.
          */
         public void releaseLock(Lock lock) {
-            // TODO(proj4_part1): implement
-            return;
+            locks.remove(lock);
+            processQueue();
         }
 
         /**
@@ -106,9 +111,22 @@ public class LockManager {
          */
         private void processQueue() {
             Iterator<LockRequest> requests = waitingQueue.iterator();
+            while (requests.hasNext()) {
+                LockRequest request = requests.next();
+                // acquire lock
+                if (checkCompatible(request.lock.lockType, request.transaction.getTransNum())) {
+                    grantOrUpdateLock(request.lock);
+                } else {
+                    return;
+                }
 
-            // TODO(proj4_part1): implement
-            return;
+                // release lock
+                Optional.ofNullable(request.releasedLocks).orElseGet(Collections::emptyList).forEach(locks::remove);
+                // remove request
+                requests.remove();
+                // unblock transaction
+                request.transaction.unblock();
+            }
         }
 
         /**
