@@ -59,15 +59,16 @@ public class LockManager {
          * the resource.
          */
         public boolean checkCompatible(LockType lockType, long except) {
-            // get all conflict locks
-            List<Lock> conflictLocks = locks.stream()
-                    .filter(lock -> !LockType.compatible(lockType, lock.lockType))
-                    .collect(Collectors.toList());
-            // all conflict lock's transaction must as same as param `except`
-            Optional<Lock> conflictOptional = conflictLocks.stream()
-                    .filter(lock -> !Objects.equals(lock.transactionNum, except))
-                    .findAny();
-            return conflictOptional.isPresent();
+            for (Lock lock : locks) {
+                if (lock.transactionNum == except) {
+                    continue;
+                }
+                if (!LockType.compatible(lock.lockType, lockType)){
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         /**
@@ -78,12 +79,15 @@ public class LockManager {
         public void grantOrUpdateLock(Lock lock) {
             for (int i = 0; i < locks.size(); i++) {
                 // update in place
-                if (Objects.equals(locks.get(i).transactionNum, lock.transactionNum)) {
+                if (Objects.equals(locks.get(i), lock)) {
                     locks.set(i, lock);
+                    updateLockToTrans(locks.get(i), lock);
                     return;
                 }
             }
 
+            // add
+            addLockToTrans(lock);
             locks.add(lock);
         }
 
@@ -93,6 +97,7 @@ public class LockManager {
          */
         public void releaseLock(Lock lock) {
             locks.remove(lock);
+            removeLockFromTrans(lock);
             processQueue();
         }
 
@@ -124,8 +129,13 @@ public class LockManager {
                     return;
                 }
 
+                // only after lock is acquired
                 // release lock
-                Optional.ofNullable(request.releasedLocks).orElseGet(Collections::emptyList).forEach(locks::remove);
+                for (Lock lock : request.releasedLocks) {
+                    removeLockFromTrans(lock);
+                    locks.remove(lock);
+                    removeLockFromTrans(lock);
+                }
                 // remove request
                 requests.remove();
                 // unblock transaction
@@ -190,15 +200,30 @@ public class LockManager {
     public void acquireAndRelease(TransactionContext transaction, ResourceName name,
                                   LockType lockType, List<ResourceName> releaseNames)
             throws DuplicateLockRequestException, NoLockHeldException {
-        // TODO(proj4_part1): implement
-        // You may modify any part of this method. You are not required to keep
-        // all your code within the given synchronized block and are allowed to
-        // move the synchronized block elsewhere if you wish.
         boolean shouldBlock = false;
         synchronized (this) {
-            
+            // duplicate lock check on granting locks
+            Optional<Lock> heldLockOptional = getLocks(name).stream()
+                    .filter(lock -> Objects.equals(lock.transactionNum, transaction.getTransNum()))
+                    .findAny();
+            if (heldLockOptional.isPresent()) {
+                throw new DuplicateLockRequestException("duplicate lock request");
+            }
+
+            // no lock held check on releasing locks
+            Set<ResourceName> heldResourceNames = getLocks(transaction).stream()
+                    .map(lock -> lock.name)
+                    .collect(Collectors.toSet());
+            for (ResourceName resourceName : releaseNames) {
+                if (!heldResourceNames.contains(resourceName)) {
+                    throw new NoLockHeldException("no held lock");
+                }
+            }
+
+            // check is lock compatible
         }
         if (shouldBlock) {
+            transaction.prepareBlock();
             transaction.block();
         }
     }
@@ -237,6 +262,7 @@ public class LockManager {
             }
         }
         if (shouldBlock) {
+            transaction.prepareBlock();
             transaction.block();
         }
     }
@@ -328,6 +354,7 @@ public class LockManager {
         }
 
         if (shouldBlock) {
+            transaction.prepareBlock();
             transaction.block();
         }
     }
@@ -374,4 +401,25 @@ public class LockManager {
     public synchronized LockContext databaseContext() {
         return context("database");
     }
+
+    private void addLockToTrans(Lock lock) {
+        Long transactionNum = lock.transactionNum;
+        transactionLocks.putIfAbsent(transactionNum, new ArrayList<>());
+        transactionLocks.get(transactionNum).add(lock);
+    }
+
+    private void updateLockToTrans(Lock oldLock, Lock newLock) {
+        List<Lock> locks = transactionLocks.get(oldLock.transactionNum);
+        for (int i = 0; i < locks.size(); ++ i) {
+            if (locks.get(i).equals(oldLock)) {
+                locks.set(i, newLock);
+            }
+        }
+    }
+
+    private void removeLockFromTrans(Lock lock) {
+        List<Lock> locks = transactionLocks.get(lock.transactionNum);
+        locks.remove(lock);
+    }
+
 }
