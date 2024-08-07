@@ -202,25 +202,36 @@ public class LockManager {
             throws DuplicateLockRequestException, NoLockHeldException {
         boolean shouldBlock = false;
         synchronized (this) {
-            // duplicate lock check on granting locks
-            Optional<Lock> heldLockOptional = getLocks(name).stream()
-                    .filter(lock -> Objects.equals(lock.transactionNum, transaction.getTransNum()))
-                    .findAny();
-            if (heldLockOptional.isPresent()) {
+            // error check
+            ResourceEntry resourceEntry = getResourceEntry(name);
+            LockType heldLockType = resourceEntry.getTransactionLockType(transaction.getTransNum());
+            if (Objects.equals(heldLockType, lockType)) {
                 throw new DuplicateLockRequestException("duplicate lock request");
             }
-
-            // no lock held check on releasing locks
-            Set<ResourceName> heldResourceNames = getLocks(transaction).stream()
-                    .map(lock -> lock.name)
-                    .collect(Collectors.toSet());
-            for (ResourceName resourceName : releaseNames) {
-                if (!heldResourceNames.contains(resourceName)) {
-                    throw new NoLockHeldException("no held lock");
-                }
+            if (Objects.equals(LockType.NL, heldLockType)) {
+                throw new NoLockHeldException("no held lock");
             }
 
-            // check is lock compatible
+            // compatible check
+            boolean compatible = resourceEntry.checkCompatible(lockType, transaction.getTransNum());
+            Lock newLock = new Lock(name, lockType, transaction.getTransNum());
+            if (compatible) {
+                // acquire
+                resourceEntry.grantOrUpdateLock(newLock);
+                // release
+                for (ResourceName resourceName : releaseNames) {
+                    release(transaction, resourceName);
+                }
+            } else {
+                shouldBlock = true;
+                List<Lock> toReleaseLock = releaseNames.stream()
+                        .map(this::getResourceEntry)
+                        .map(entry -> entry.getTransactionLockType(transaction.getTransNum()))
+                        .map(type -> new Lock(name, type, transaction.getTransNum()))
+                        .collect(Collectors.toList());
+                LockRequest lockRequest = new LockRequest(transaction, newLock, toReleaseLock);
+                resourceEntry.addToQueue(lockRequest, true);
+            }
         }
         if (shouldBlock) {
             transaction.prepareBlock();
