@@ -134,7 +134,6 @@ public class LockManager {
                 for (Lock lock : request.releasedLocks) {
                     removeLockFromTrans(lock);
                     locks.remove(lock);
-                    removeLockFromTrans(lock);
                 }
                 // remove request
                 requests.remove();
@@ -263,10 +262,8 @@ public class LockManager {
                 resourceEntry.addToQueue(new LockRequest(transaction, newLock), false);
             } else {
                 // duplicate lock check
-                Optional<Lock> preExistingLockOptional = getLocks(name).stream()
-                        .filter(lock -> Objects.equals(lock.transactionNum, transaction.getTransNum()) && lock.lockType == lockType)
-                        .findAny();
-                if (preExistingLockOptional.isPresent()) {
+                LockType heldLockType = resourceEntry.getTransactionLockType(transaction.getTransNum());
+                if (LockType.NL.equals(heldLockType)) {
                     throw new DuplicateLockRequestException("duplicate lock request");
                 }
                 resourceEntry.grantOrUpdateLock(newLock);
@@ -297,7 +294,7 @@ public class LockManager {
                     .findAny();
 
             if (!heldLockOptional.isPresent()) {
-                throw new NoLockHeldException("No lock held by transaction " + transaction.getTransNum());
+                throw new NoLockHeldException("no lock held by transaction");
             }
 
             // release lock on resource
