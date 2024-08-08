@@ -263,7 +263,7 @@ public class LockManager {
             } else {
                 // duplicate lock check
                 LockType heldLockType = resourceEntry.getTransactionLockType(transaction.getTransNum());
-                if (LockType.NL.equals(heldLockType)) {
+                if (heldLockType.equals(lockType)) {
                     throw new DuplicateLockRequestException("duplicate lock request");
                 }
                 resourceEntry.grantOrUpdateLock(newLock);
