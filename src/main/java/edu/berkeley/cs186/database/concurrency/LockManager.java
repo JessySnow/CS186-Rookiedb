@@ -87,8 +87,8 @@ public class LockManager {
             }
 
             // add
-            addLockToTrans(lock);
             locks.add(lock);
+            addLockToTrans(lock);
         }
 
         /**
@@ -132,13 +132,14 @@ public class LockManager {
                 // only after lock is acquired
                 // release lock
                 for (Lock lock : request.releasedLocks) {
-                    removeLockFromTrans(lock);
                     locks.remove(lock);
+                    removeLockFromTrans(lock);
                 }
-                // remove request
-                requests.remove();
                 // unblock transaction
                 request.transaction.unblock();
+
+                // remove request
+                requests.remove();
             }
         }
 
@@ -259,18 +260,18 @@ public class LockManager {
             boolean compatible = resourceEntry.checkCompatible(lockType, transaction.getTransNum());
             if (!compatible) {
                 shouldBlock = true;
+                transaction.prepareBlock();
                 resourceEntry.addToQueue(new LockRequest(transaction, newLock), false);
             } else {
                 // duplicate lock check
                 LockType heldLockType = resourceEntry.getTransactionLockType(transaction.getTransNum());
                 if (heldLockType.equals(lockType)) {
-                    throw new DuplicateLockRequestException("duplicate lock request");
+                    throw new DuplicateLockRequestException("lock type " + lockType + " already held by transaction " + transaction + " on resource " + name);
                 }
                 resourceEntry.grantOrUpdateLock(newLock);
             }
         }
         if (shouldBlock) {
-            transaction.prepareBlock();
             transaction.block();
         }
     }
@@ -294,7 +295,7 @@ public class LockManager {
                     .findAny();
 
             if (!heldLockOptional.isPresent()) {
-                throw new NoLockHeldException("no lock held by transaction");
+                throw new NoLockHeldException("no lock held by " + transaction + " on resource " + name);
             }
 
             // release lock on resource
@@ -329,40 +330,34 @@ public class LockManager {
         boolean shouldBlock = false;
         synchronized (this) {
             // lock on resource
-            Optional<Lock> heldLockOptional = getLocks(transaction).stream()
-                    .filter(lock -> Objects.equals(lock.name, name))
-                    .findAny();
-
+            ResourceEntry entry = getResourceEntry(name);
+            LockType heldLockType = entry.getTransactionLockType(transaction.getTransNum());
             // check no lock
-            if (!heldLockOptional.isPresent()) {
-                throw new NoLockHeldException("No lock held by transaction");
+            if (LockType.NL.equals(heldLockType)) {
+                throw new NoLockHeldException("no lock held on resource " + name + " by transaction " + transaction);
             }
-
             // check duplicate lock
-            Lock heldLock = heldLockOptional.get();
-            if (Objects.equals(heldLock.lockType, newLockType)) {
-                throw new DuplicateLockRequestException("duplicate lock request");
+            if (Objects.equals(heldLockType, newLockType)) {
+                throw new DuplicateLockRequestException(heldLockType + " type lock already held by transaction " + transaction + " on resource " + name);
             }
-
             // check if new lock is promotion
-            if (!LockType.substitutable(newLockType, heldLock.lockType)) {
-                throw new InvalidLockException("invalid lock type");
+            if (!LockType.substitutable(newLockType, heldLockType)) {
+                throw new InvalidLockException(newLockType + " is not a promotion of lock type " + heldLockType);
             }
 
             // check compatible
-            ResourceEntry resourceEntry = getResourceEntry(name);
             Lock newLock = new Lock(name, newLockType, transaction.getTransNum());
-            boolean compatible = resourceEntry.checkCompatible(newLockType, transaction.getTransNum());
+            boolean compatible = entry.checkCompatible(newLockType, transaction.getTransNum());
             if (!compatible) {
                 shouldBlock = true;
-                resourceEntry.addToQueue(new LockRequest(transaction, newLock), true);
+                transaction.prepareBlock();
+                entry.addToQueue(new LockRequest(transaction, newLock), true);
             } else {
-                resourceEntry.grantOrUpdateLock(newLock);
+                entry.grantOrUpdateLock(newLock);
             }
         }
 
         if (shouldBlock) {
-            transaction.prepareBlock();
             transaction.block();
         }
     }
