@@ -132,8 +132,7 @@ public class LockManager {
                 // only after lock is acquired
                 // release lock
                 for (Lock lock : request.releasedLocks) {
-                    locks.remove(lock);
-                    removeLockFromTrans(lock);
+                    release(request.transaction, lock.name);
                 }
                 // unblock transaction
                 request.transaction.unblock();
@@ -208,33 +207,30 @@ public class LockManager {
             if (Objects.equals(heldLockType, lockType)) {
                 throw new DuplicateLockRequestException("duplicate lock request");
             }
-            if (Objects.equals(LockType.NL, heldLockType)) {
-                throw new NoLockHeldException("no held lock");
-            }
 
             // compatible check
-            boolean compatible = resourceEntry.checkCompatible(lockType, transaction.getTransNum());
             Lock newLock = new Lock(name, lockType, transaction.getTransNum());
-            if (compatible) {
+            if (resourceEntry.checkCompatible(lockType, transaction.getTransNum())) {
                 // acquire
                 resourceEntry.grantOrUpdateLock(newLock);
                 // release
                 for (ResourceName resourceName : releaseNames) {
+                    if (resourceName.equals(name)) continue;
                     release(transaction, resourceName);
                 }
             } else {
                 shouldBlock = true;
-                List<Lock> toReleaseLock = releaseNames.stream()
-                        .map(this::getResourceEntry)
-                        .map(entry -> entry.getTransactionLockType(transaction.getTransNum()))
-                        .map(type -> new Lock(name, type, transaction.getTransNum()))
-                        .collect(Collectors.toList());
-                LockRequest lockRequest = new LockRequest(transaction, newLock, toReleaseLock);
+                transaction.prepareBlock();
+                List<Lock> toReleaseLocks = new ArrayList<>();
+                for (ResourceName resourceName : releaseNames) {
+                    LockType toReleseLockType = getLockType(transaction, resourceName);
+                    toReleaseLocks.add(new Lock(resourceName, toReleseLockType, transaction.getTransNum()));
+                }
+                LockRequest lockRequest = new LockRequest(transaction, newLock, toReleaseLocks);
                 resourceEntry.addToQueue(lockRequest, true);
             }
         }
         if (shouldBlock) {
-            transaction.prepareBlock();
             transaction.block();
         }
     }
