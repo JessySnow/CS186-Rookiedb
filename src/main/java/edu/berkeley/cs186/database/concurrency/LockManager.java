@@ -79,9 +79,9 @@ public class LockManager {
         public void grantOrUpdateLock(Lock lock) {
             for (int i = 0; i < locks.size(); i++) {
                 // update in place
-                if (Objects.equals(locks.get(i), lock)) {
-                    locks.set(i, lock);
+                if (locks.get(i).transactionNum.equals(lock.transactionNum)) {
                     updateLockToTrans(locks.get(i), lock);
+                    locks.set(i, lock);
                     return;
                 }
             }
@@ -258,7 +258,7 @@ public class LockManager {
             ResourceEntry resourceEntry = getResourceEntry(name);
             Lock newLock = new Lock(name, lockType, transaction.getTransNum());
             boolean compatible = resourceEntry.checkCompatible(lockType, transaction.getTransNum());
-            if (!compatible) {
+            if (!resourceEntry.waitingQueue.isEmpty() || !compatible) {
                 shouldBlock = true;
                 transaction.prepareBlock();
                 resourceEntry.addToQueue(new LockRequest(transaction, newLock), false);
